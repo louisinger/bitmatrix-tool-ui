@@ -1,9 +1,9 @@
-import { ChangeAddressFromAssetGetter, craftMultipleRecipientsPset, greedyCoinSelector, UnblindedOutput } from "ldk";
-import { AssetHash, confidential, networks, Psbt, script, address as liquidAddress } from "liquidjs-lib";
+import { ChangeAddressFromAssetGetter, craftMultipleRecipientsPset, AssetHash, confidential, networks, Psbt, script, greedyCoinSelector, UnblindedOutput } from "ldk";
 import { detectProvider, MarinaProvider } from "marina-provider";
 import { useEffect, useState } from "react";
 import { Button, Input, Loader } from "rsuite";
 import * as ecc from "tiny-secp256k1";
+import { inputBlindingDataMap, outPubKeysMap } from './utils';
 
 declare global {
   interface Window {
@@ -94,31 +94,12 @@ export const LdkTool2 = () => {
 
       // deserialize and inspect the transaction
       const ptx = Psbt.fromBase64(unsignedTx);
-      //console.log(decoded.TX.toHex());
 
-      // here we sure we are adding only one input and assume the last is our.
-      // In case transaction has input user adds (not marina) be sure to track it down
-      const marinaInputIndex = ptx.data.inputs.length - 1;
-
-      // last output is always the fee output and the one before it, is the marina change output.
-      // keep in mind in case you manipulate transaction manually after calling craftMultipleRecipientsPset
-      const marinaChangeOutputIndex = ptx.data.outputs.length - 2;
-
-      const coinSelected = coins.find(c => c.txid === Buffer.from(ptx.TX.ins[marinaInputIndex].hash).reverse().toString("hex"));
-      if (!coinSelected) throw new Error("coin not found");
-
-      // create a map input index => blinding private key
-      // we need this to unblind the utxo data
-
-      const inputBlindingMap = new Map().set(marinaInputIndex, coinSelected.unblindData);
-
-      // create a map output index => blinding PUBLIC (!) key
-      // this is needed to blind the marina change output
-      const outputBlindingMap = new Map<number, Buffer>().set(
-        marinaChangeOutputIndex,
-        // this is the blinding publick key of the change output for marina
-        liquidAddress.fromConfidential(changeAddressGetter(networks.testnet.assetHash)).blindingKey
-      );
+      const inputBlindingMap = inputBlindingDataMap(unsignedTx, coins);
+      const outputBlindingMap = outPubKeysMap(unsignedTx, [
+        changeAddressGetter(networks.testnet.assetHash),
+        address
+      ]);
 
       await ptx.blindOutputsByIndex(Psbt.ECCKeysGenerator(ecc), inputBlindingMap, outputBlindingMap);
 
