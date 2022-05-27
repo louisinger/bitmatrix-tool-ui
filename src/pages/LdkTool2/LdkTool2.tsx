@@ -1,4 +1,4 @@
-import { AddressInterface, craftMultipleRecipientsPset, greedyCoinSelector, UnblindedOutput } from "ldk";
+import { ChangeAddressFromAssetGetter, craftMultipleRecipientsPset, greedyCoinSelector, UnblindedOutput } from "ldk";
 import { AssetHash, confidential, networks, Psbt, script, address as liquidAddress } from "liquidjs-lib";
 import { detectProvider, MarinaProvider } from "marina-provider";
 import { useEffect, useState } from "react";
@@ -43,12 +43,18 @@ export const LdkTool2 = () => {
     checkMarinaInstalled();
   }, []);
 
+  const makeAssetChangeGetter = (marina: MarinaProvider) => async (assets: Array<string>): Promise<ChangeAddressFromAssetGetter> => {
+    const addresses = await Promise.all(assets.map(_ => marina.getNextChangeAddress()))
+    return (asset: string) => {
+      const index = assets.findIndex(a => a === asset)
+      return addresses[index].confidentialAddress
+    }
+  }
+
   const signTransaction = async () => {
     if (marina) {
       const coins = await marina.getCoins();
-
-      const changeAddress = await marina.getNextChangeAddress();
-
+      
       // 1. create an empty psbt object
       const pset = new Psbt({ network: networks.testnet });
 
@@ -73,13 +79,16 @@ export const LdkTool2 = () => {
       // 4. Serialize as base64 the psbt to be passed to LDK
       const tx = pset.toBase64();
 
+      const makeGetter = makeAssetChangeGetter(marina)
+      const changeAddressGetter = await makeGetter([networks.testnet.assetHash])
+
       // 5. Craft the transaction with multiple outputs and add fee & change output to the psbt
       const unsignedTx = craftMultipleRecipientsPset({
         psetBase64: tx,
         unspents: coins as UnblindedOutput[],
         recipients,
         coinSelector: greedyCoinSelector(),
-        changeAddressByAsset: (_: string) => changeAddress.confidentialAddress,
+        changeAddressByAsset: changeAddressGetter,
         addFee: true,
       }); 
 
@@ -108,7 +117,7 @@ export const LdkTool2 = () => {
       const outputBlindingMap = new Map<number, Buffer>().set(
         marinaChangeOutputIndex,
         // this is the blinding publick key of the change output for marina
-        liquidAddress.fromConfidential(changeAddress.confidentialAddress).blindingKey
+        liquidAddress.fromConfidential(changeAddressGetter(networks.testnet.assetHash)).blindingKey
       );
 
       await ptx.blindOutputsByIndex(Psbt.ECCKeysGenerator(ecc), inputBlindingMap, outputBlindingMap);
