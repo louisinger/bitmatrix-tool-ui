@@ -15,7 +15,7 @@ export const LdkTool2 = () => {
   const [address, setAddress] = useState<string>("");
   const [data, setData] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
-  const [marinaa, setMarinaa] = useState<MarinaProvider>();
+  const [marina, setMarinaa] = useState<MarinaProvider>();
 
   const checkMarinaInstalled = async (): Promise<boolean> => {
     return detectProvider("marina")
@@ -45,9 +45,9 @@ export const LdkTool2 = () => {
 
   const getBlindingKeyByScript = async (script: string): Promise<string> => {
     try {
-      if (marinaa) {
+      if (marina) {
         // get addresses from marina
-        const addresses = await marinaa.getAddresses();
+        const addresses = await marina.getAddresses();
         // find the address of the requested script
         let found: AddressInterface | undefined;
 
@@ -69,10 +69,10 @@ export const LdkTool2 = () => {
   };
 
   const signTransaction = async () => {
-    if (marinaa) {
-      const coins = await marinaa.getCoins();
+    if (marina) {
+      const coins = await marina.getCoins();
 
-      const changeAddress = await marinaa.getNextChangeAddress();
+      const changeAddress = await marina.getNextChangeAddress();
 
       // 1. create an empty psbt object
       const pset = new Psbt({ network: networks.testnet });
@@ -106,7 +106,7 @@ export const LdkTool2 = () => {
         coinSelector: greedyCoinSelector(),
         changeAddressByAsset: (_: string) => changeAddress.confidentialAddress,
         addFee: true,
-      });
+      }); 
 
       // deserialize and inspect the transaction
       const ptx = Psbt.fromBase64(unsignedTx);
@@ -138,14 +138,14 @@ export const LdkTool2 = () => {
       await ptx.blindOutputsByIndex(Psbt.ECCKeysGenerator(ecc), inputBlindingMap, outputBlindingMap);
 
       // 7. Sign the transaction's inputs with Marina
-      const signedTx = await marinaa.signTransaction(ptx.toBase64());
+      const signedTx = await marina.signTransaction(ptx.toBase64());
 
       // 7. Broadcast the transaction to the network (need to ba added to Marina)
       const finalTx = Psbt.fromBase64(signedTx);
 
       finalTx.finalizeAllInputs();
 
-      const txFinal = await marinaa.broadcastTransaction(finalTx.extractTransaction().toHex());
+      const txFinal = await marina.broadcastTransaction(finalTx.extractTransaction().toHex());
 
       window.open("https://liquid.network/tr/testnet/tx/" + txFinal.txid, "_blank");
     }

@@ -118,7 +118,7 @@ export const LdkTool = () => {
 
     console.log("5");
 
-    const pset = wallet.sendTx(recipient, greedyCoinSelector(), changeAddress, false);
+    const pset = wallet.sendTx(recipient, greedyCoinSelector(), () => changeAddress, false);
 
     console.log("6");
 
