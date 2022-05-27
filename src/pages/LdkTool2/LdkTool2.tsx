@@ -43,31 +43,6 @@ export const LdkTool2 = () => {
     checkMarinaInstalled();
   }, []);
 
-  const getBlindingKeyByScript = async (script: string): Promise<string> => {
-    try {
-      if (marina) {
-        // get addresses from marina
-        const addresses = await marina.getAddresses();
-        // find the address of the requested script
-        let found: AddressInterface | undefined;
-
-        addresses.forEach((addr: AddressInterface) => {
-          const currentScript = liquidAddress.toOutputScript(addr.confidentialAddress).toString("hex");
-          if (currentScript === script) {
-            found = addr;
-          }
-        });
-
-        if (!found) throw new Error("no blinding key for script " + script);
-        return found.blindingPrivateKey;
-      }
-
-      return "";
-    } catch (e) {
-      throw e;
-    }
-  };
-
   const signTransaction = async () => {
     if (marina) {
       const coins = await marina.getCoins();
@@ -120,12 +95,13 @@ export const LdkTool2 = () => {
       // keep in mind in case you manipulate transaction manually after calling craftMultipleRecipientsPset
       const marinaChangeOutputIndex = ptx.data.outputs.length - 2;
 
-      // let's get bliding private first using the marina input script
-      const blindPrivKey = await getBlindingKeyByScript(ptx!.data!.inputs[marinaInputIndex]!.witnessUtxo!.script.toString("hex"));
+      const coinSelected = coins.find(c => c.txid === Buffer.from(ptx.TX.ins[marinaInputIndex].hash).reverse().toString("hex"));
+      if (!coinSelected) throw new Error("coin not found");
 
       // create a map input index => blinding private key
       // we need this to unblind the utxo data
-      const inputBlindingMap = new Map<number, Buffer>().set(marinaInputIndex, Buffer.from(blindPrivKey, "hex"));
+
+      const inputBlindingMap = new Map().set(marinaInputIndex, coinSelected.unblindData);
 
       // create a map output index => blinding PUBLIC (!) key
       // this is needed to blind the marina change output
